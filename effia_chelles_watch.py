@@ -33,8 +33,11 @@ def check():
         browser = p.chromium.launch()
         page = browser.new_page(locale='fr-FR')
         try:
-            page.goto(URL, wait_until='networkidle')
+            page.set_default_timeout(15000)
+            page.goto(URL, wait_until='domcontentloaded')
+            print('page chargee')
             page.get_by_text('Abonnement', exact=True).first.click()
+            print('onglet Abonnement ok')
             sel = page.locator('select').filter(
                 has=page.locator('option', has_text='Gratuit')).first
             sel.wait_for(timeout=10000)
