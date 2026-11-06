@@ -14,6 +14,7 @@ from playwright.sync_api import sync_playwright
 URL = ('https://www.effia.com/parking/parking-gare-de-chelles-pr-effia'
        '?orderType=subscription&vehicle=AUTO&qty=1'
        '&entry=2026-12-01T00%3A00&exit=2026-12-31T00%3A00')
+LABELS = ['Navigo - Gratuit', 'Navigo annuel - Gratuit']
 NTFY_URL = os.environ.get('NTFY_URL')  # optionnel
 STATE = Path.home() / '.effia_chelles_state.json'
 SOLD_OUT = re.compile('Plus d.abonnement disponible', re.I)
@@ -24,10 +25,16 @@ DEBUG = '--debug' in sys.argv
 def dump(page):
     page.screenshot(path='debug.png', full_page=True)
     Path('debug.txt').write_text(page.inner_text('body'), encoding='utf-8')
+    try:
+        html = page.get_by_text('Navigo - Gratuit').first.evaluate(
+            'el => { let n = el; for (let i = 0; i < 4 && n.parentElement; i++) n = n.parentElement; return n.outerHTML; }')
+        Path('debug_dom.html').write_text(html[:30000], encoding='utf-8')
+    except Exception as e:
+        Path('debug_dom.html').write_text(f'impossible : {e}', encoding='utf-8')
 
 
 def check():
-    """Retourne {libelle de l'offre gratuite: place disponible (bool)}."""
+    """Retourne {offre gratuite: place disponible (bool)}."""
     result = {}
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -36,16 +43,10 @@ def check():
             page.set_default_timeout(15000)
             page.goto(URL, wait_until='domcontentloaded')
             print('page chargee')
-            sel = page.locator('select').filter(
-                has=page.locator('option', has_text='Gratuit')).first
-            sel.wait_for(state='attached')
-            print('liste trouvee')
-            texts = sel.locator('option').all_text_contents()
-            free = [(i, t.strip()) for i, t in enumerate(texts) if 'Gratuit' in t]
-            if not free:
-                raise RuntimeError('Aucune offre Gratuit dans la liste')
-            for i, label in free:
-                sel.select_option(index=i, force=True)
+            page.get_by_text(LABELS[0]).filter(visible=True).first.wait_for()
+            print('offres trouvees')
+            for label in LABELS:
+                page.get_by_text(label).filter(visible=True).first.click()
                 page.wait_for_timeout(3000)
                 sold_out = page.get_by_text(SOLD_OUT).filter(visible=True).count() > 0
                 can_subscribe = page.get_by_text(SUBSCRIBE).filter(visible=True).count() > 0
