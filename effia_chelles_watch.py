@@ -15,6 +15,7 @@ URL = ('https://www.effia.com/parking/parking-gare-de-chelles-pr-effia'
        '?orderType=subscription&vehicle=AUTO&qty=1'
        '&entry=2026-12-01T00%3A00&exit=2026-12-31T00%3A00')
 LABELS = ['Navigo - Gratuit', 'Navigo annuel - Gratuit']
+OFFERS = 'label[for^="subscription-type"]'
 NTFY_URL = os.environ.get('NTFY_URL')  # optionnel
 STATE = Path.home() / '.effia_chelles_state.json'
 SOLD_OUT = re.compile('Plus d.abonnement disponible', re.I)
@@ -26,11 +27,20 @@ def dump(page):
     page.screenshot(path='debug.png', full_page=True)
     Path('debug.txt').write_text(page.inner_text('body'), encoding='utf-8')
     try:
-        html = page.get_by_text('Navigo - Gratuit').first.evaluate(
-            'el => { let n = el; for (let i = 0; i < 4 && n.parentElement; i++) n = n.parentElement; return n.outerHTML; }')
+        html = page.locator(OFFERS).first.evaluate(
+            'el => { let n = el; for (let i = 0; i < 6 && n.parentElement; i++) n = n.parentElement; return n.outerHTML; }')
         Path('debug_dom.html').write_text(html[:30000], encoding='utf-8')
     except Exception as e:
         Path('debug_dom.html').write_text(f'impossible : {e}', encoding='utf-8')
+
+
+def pick(page, label):
+    """Coche le bouton radio de l'offre (les libelles sont masques)."""
+    lab = page.locator(OFFERS, has_text=label).first
+    lab.wait_for(state='attached')
+    radio_id = lab.get_attribute('for')
+    page.evaluate('id => document.getElementById(id).click()', radio_id)
+    return page.evaluate('id => document.getElementById(id).checked', radio_id)
 
 
 def check():
@@ -43,13 +53,14 @@ def check():
             page.set_default_timeout(15000)
             page.goto(URL, wait_until='domcontentloaded')
             print('page chargee')
-            page.get_by_text(LABELS[0]).filter(visible=True).first.wait_for()
+            page.locator(OFFERS, has_text=LABELS[0]).first.wait_for(state='attached')
             print('offres trouvees')
             for label in LABELS:
-                page.get_by_text(label).filter(visible=True).first.click()
+                checked = pick(page, label)
                 page.wait_for_timeout(3000)
                 sold_out = page.get_by_text(SOLD_OUT).filter(visible=True).count() > 0
                 can_subscribe = page.get_by_text(SUBSCRIBE).filter(visible=True).count() > 0
+                print(f'{label}: coche={checked} complet={sold_out} bouton={can_subscribe}')
                 result[label] = (not sold_out) and can_subscribe
             if DEBUG:
                 dump(page)
