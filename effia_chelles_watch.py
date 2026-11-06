@@ -36,17 +36,16 @@ def check():
             page.set_default_timeout(15000)
             page.goto(URL, wait_until='domcontentloaded')
             print('page chargee')
-            page.get_by_text('Abonnement', exact=True).first.click()
-            print('onglet Abonnement ok')
             sel = page.locator('select').filter(
                 has=page.locator('option', has_text='Gratuit')).first
-            sel.wait_for(timeout=10000)
+            sel.wait_for(state='attached')
+            print('liste trouvee')
             texts = sel.locator('option').all_text_contents()
             free = [(i, t.strip()) for i, t in enumerate(texts) if 'Gratuit' in t]
             if not free:
                 raise RuntimeError('Aucune offre Gratuit dans la liste')
             for i, label in free:
-                sel.select_option(index=i)
+                sel.select_option(index=i, force=True)
                 page.wait_for_timeout(3000)
                 sold_out = page.get_by_text(SOLD_OUT).filter(visible=True).count() > 0
                 can_subscribe = page.get_by_text(SUBSCRIBE).filter(visible=True).count() > 0
@@ -98,7 +97,7 @@ def main():
     try:
         current = check()
     except Exception as e:
-           print(f'ERREUR : {e}')
+        print(f'ERREUR : {e}')
         # Sur GitHub, l'echec du job est deja signale par e-mail
         if 'error' not in last and not os.environ.get('GITHUB_ACTIONS'):
             notify('Chelles P+R : script en erreur', str(e)[:300])
