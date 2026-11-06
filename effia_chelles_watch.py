@@ -98,6 +98,7 @@ def main():
     try:
         current = check()
     except Exception as e:
+           print(f'ERREUR : {e}')
         # Sur GitHub, l'echec du job est deja signale par e-mail
         if 'error' not in last and not os.environ.get('GITHUB_ACTIONS'):
             notify('Chelles P+R : script en erreur', str(e)[:300])
